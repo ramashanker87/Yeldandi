@@ -1,0 +1,23 @@
+version: "3.7"
+services:
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES = sqs
+      - AWS_DEFAULT_REGION = eu-west-1
+      - LS_LOG=info
+      - DEBUG=1
+      - DOCKER_HOST= unix:///var/run/docker.sock
+      - EDGE_PORT=4566
+    volumes:
+      - ./localstack-ready:/etc/localstack/init/ready.d/
+      - ..:/workdir
+      - /var/lib/localstack:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - sqs-network
+networks:
+  sqs-network:
+    driver: bridge

@@ -1,0 +1,54 @@
+## Create a Spring boot application as student-management-app
+
+## Create two microservice
+
+    rabbitmq-student-producer
+    rabbitmq-student-consumer
+
+## Create 1st microservice as called rabbitmq-student-producer which produce the student
+    and name to the queue
+
+It has two controller  (Producer)
+
+/student/save  @RequestBody Student
+
+/student/delete  (requestparam name) delete student using name
+
+It should have two queue
+student.out
+name.out
+
+## Create Second Microservice  calles rabbitmq-student-consumer  (Consumer)
+
+It have two listener
+One is listen on queue student.out
+and another on queue name.out
+
+The listener student.out should read the student object and store to mysql database
+
+The listener queue name.out should delete the stdent recod based on name
+
+## Detail of Modle Student
+
+String id
+String name
+String schoolName
+int age
+String gender
+
+Json Model
+
+    {
+         "name":"student1",
+         "schoolName": "school1",
+         "age":17,
+         "gender": "M",
+    }
+
+ Develop This project using TDD and test coverage should be more than 80%
+
+ All the data should get store in Mysql Database and use Rabbitmq for producer and consumer
+
+ Create Readme file which contain the all steps
+
+

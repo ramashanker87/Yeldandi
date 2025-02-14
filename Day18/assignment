@@ -1,0 +1,46 @@
+## Create a Spring boot application as patient-management-app with sqs where the information send through sqs
+    SQS running in localstack
+
+## Detail of Patient Modle
+
+String name
+String id
+String hospitalName
+int age
+String gender
+
+
+## Security
+
+ Role : PATIENT, DOCTOR
+
+## Create Controller in patient controller patient-sqs-app
+
+
+/patient/send --- patient on access
+
+    {
+         "name":"patient1",
+         "id": "p1",
+         "hospitalName": "hospital1",
+         "age":55,
+         "gender": "M"
+
+    }
+
+    Request header
+    "disease": "fever"
+
+
+## Create Controller in doctor controller doctor-sqs-app
+
+
+/doctor/receive --- only doctor access
+
+Get the response body and Header in response header
+
+ Develop This project using TDD and test coverage should be more than 80%
+
+ Create Readme file which contain the all steps
+
+

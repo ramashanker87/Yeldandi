@@ -1,0 +1,12 @@
+version: '3.2'
+services:
+  artemis:
+    image: apache/activemq-artemis:latest
+    ports:
+      - "61618:61616"
+      - "8161:8161"
+    environment:
+      ARTEMIS_USERNAME: artemis
+      ARTEMIS_PASSWORD: artemis
+      ARTEMIS_MIN_MEMORY: 512M
+      ARTEMIS_MAX_MEMORY: 1024M
