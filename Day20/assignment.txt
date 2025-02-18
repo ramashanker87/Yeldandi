@@ -1,0 +1,37 @@
+# Create spring boot microservice for vehicle-app
+
+# Vehicle Module
+    String vehicleNumber
+    String vehicleType
+    String fuelType
+
+# Owner Module
+    String Name
+    String address
+    String age
+
+## Registration
+
+    Owner vehicleOwner
+    Vehicle vehicle
+
+## Create a two controller end point
+
+    POST /register/vehicle (@requestBody Vehicle, @requestBody Owner)
+
+    Store in hash map as
+    <vehicleNumber, Registration>
+
+   Delete /dergister/vehicle(@requestParam vehicleNumber)
+
+    delete from map based on vehicle Number
+
+## Log the level
+    Log level for Vehicle should in info
+    Log Level for owner should be debug
+
+    log this in log file name vehicle.log
+
+    Change the log level at run time from debug to info and info to debug
+
+## Write the read me file for the all steps.

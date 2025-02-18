@@ -1,0 +1,13 @@
+package com.logging.app;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class SpringLoggingAppApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(SpringLoggingAppApplication.class, args);
+	}
+
+}
