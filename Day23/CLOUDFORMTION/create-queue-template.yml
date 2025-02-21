@@ -1,0 +1,16 @@
+#This specifies the version of the CloudFormation Latest
+AWSTemplateFormatVersion: '2010-09-09'
+# This is used when leveraging AWS SAM (Serverless Application Model).
+Transform: 'AWS::Serverless-2016-10-31'
+#A human-readable description of what this template does
+Description: CloudFormation Template to create an SQS Queue
+#Resources: → Declares the AWS resources being created.
+Resources:
+  # Logical name for the resource
+  RaghuQueue:
+    #Specifies that this resource is an Amazon SQS Queue.
+    Type: "AWS::SQS::Queue"
+   # Defines configuration for the queue.
+    Properties:
+      #Sets the queue's name.
+      QueueName: "raghu-queue"

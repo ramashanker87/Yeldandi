@@ -1,0 +1,6 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  RaghuECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: raghu/microservice-repo

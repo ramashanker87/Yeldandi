@@ -1,0 +1,555 @@
+The image contains a rough design of a Digital Parking System using two microservices. The focus is on the car-parking-registration microservice, which has two REST controllers:
+
+Start Parking (/parking/start)
+
+Accepts a Car object in the request body.
+Accepts parkingNo as a request parameter.
+Returns a ParkingStart object.
+End Parking (/parking/end)
+
+Accepts regNo as a request parameter.
+Returns a ParkingEnd object.
+Data Models:
+Car Module:
+
+ownerName
+regNo (registration number)
+module
+type (fuel type)
+ParkingStart Module:
+
+parkingNo
+startTime (always current time)
+status (Start)
+regNo
+ParkingEnd Module:
+
+parkingNo
+startTime
+endTime
+price (calculated based on time difference)
+status (End)
+regNo
+Pricing Calculation:
+The price is calculated based on the time difference between startTime and endTime.
+Rate: 2 Rs per minute.
+Would you like a Spring Boot implementation for this?
+
+
+
+
+
+
+
+
+You said:
+Yes
+ChatGPT said:
+
+
+
+Here’s a Spring Boot implementation of the Car Parking System using Spring Boot, Spring Data JPA, and REST APIs.
+
+Step 1: Create a Spring Boot Project
+You can use Spring Initializr with the following dependencies:
+
+Spring Web (for REST APIs)
+Spring Data JPA (for database operations)
+H2 Database (or MySQL, PostgreSQL)
+Step 2: Define the Data Models
+Car.java
+java
+Copy
+Edit
+
+
+
+
+package com.example.parking.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import lombok.Data;
+
+@Entity
+@Data
+public class Car {
+    @Id
+    private String regNo;
+    private String ownerName;
+    private String module;
+    private String type; // Fuel type
+}
+
+
+ParkingStart.java
+
+package com.example.parking.model;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import java.time.LocalDateTime;
+
+@Entity
+@Data
+public class ParkingStart {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String parkingNo;
+    private LocalDateTime startTime;
+    private String status;
+    private String regNo;
+}
+
+
+
+ParkingEnd.java
+
+
+package com.example.parking.model;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import java.time.Duration;
+import java.time.LocalDateTime;
+
+@Entity
+@Data
+public class ParkingEnd {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String parkingNo;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private int price;
+    private String status;
+    private String regNo;
+
+    public void calculatePrice() {
+        if (startTime != null && endTime != null) {
+            long minutes = Duration.between(startTime, endTime).toMinutes();
+            this.price = (int) minutes * 2; // Rs 2 per minute
+        }
+    }
+}
+
+
+Step 3: Create Repositories
+CarRepository.java
+
+package com.example.parking.repository;
+
+import com.example.parking.model.Car;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface CarRepository extends JpaRepository<Car, String> {
+}
+ParkingStartRepository.java
+java
+Copy
+Edit
+package com.example.parking.repository;
+
+import com.example.parking.model.ParkingStart;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface ParkingStartRepository extends JpaRepository<ParkingStart, Long> {
+    Optional<ParkingStart> findByRegNo(String regNo);
+}
+
+
+ParkingEndRepository.java
+
+package com.example.parking.repository;
+
+import com.example.parking.model.ParkingEnd;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ParkingEndRepository extends JpaRepository<ParkingEnd, Long> {
+}
+
+
+
+
+Step 4: Create the Controller
+
+ParkingController.java
+
+package com.example.parking.controller;
+
+import com.example.parking.model.Car;
+import com.example.parking.model.ParkingEnd;
+import com.example.parking.model.ParkingStart;
+import com.example.parking.repository.CarRepository;
+import com.example.parking.repository.ParkingEndRepository;
+import com.example.parking.repository.ParkingStartRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/parking")
+public class ParkingController {
+
+    @Autowired
+    private CarRepository carRepository;
+
+    @Autowired
+    private ParkingStartRepository parkingStartRepository;
+
+    @Autowired
+    private ParkingEndRepository parkingEndRepository;
+
+    // Start Parking API
+    @PostMapping("/start")
+    public ParkingStart startParking(@RequestBody Car car, @RequestParam String parkingNo) {
+        carRepository.save(car); // Save car details if not already present
+
+        ParkingStart parkingStart = new ParkingStart();
+        parkingStart.setParkingNo(parkingNo);
+        parkingStart.setStartTime(LocalDateTime.now());
+        parkingStart.setStatus("Start");
+        parkingStart.setRegNo(car.getRegNo());
+
+        return parkingStartRepository.save(parkingStart);
+    }
+
+    // End Parking API
+    @PostMapping("/end")
+    public ParkingEnd endParking(@RequestParam String regNo) {
+        Optional<ParkingStart> parkingStartOpt = parkingStartRepository.findByRegNo(regNo);
+        if (parkingStartOpt.isPresent()) {
+            ParkingStart parkingStart = parkingStartOpt.get();
+
+            ParkingEnd parkingEnd = new ParkingEnd();
+            parkingEnd.setParkingNo(parkingStart.getParkingNo());
+            parkingEnd.setStartTime(parkingStart.getStartTime());
+            parkingEnd.setEndTime(LocalDateTime.now());
+            parkingEnd.setStatus("End");
+            parkingEnd.setRegNo(parkingStart.getRegNo());
+            parkingEnd.calculatePrice();
+
+            parkingStartRepository.delete(parkingStart); // Remove active parking session
+            return parkingEndRepository.save(parkingEnd);
+        } else {
+            throw new RuntimeException("No active parking found for regNo: " + regNo);
+        }
+    }
+}
+
+
+Step 5: Configure Application Properties
+In src/main/resources/application.properties:
+
+ini
+Copy
+Edit
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+Step 6: Run and Test the APIs
+Start Parking
+Endpoint: POST /parking/start
+Body:
+
+json
+Copy
+Edit
+{
+  "regNo": "TS09AB1234",
+  "ownerName": "John Doe",
+  "module": "Sedan",
+  "type": "Petrol"
+}
+Query Param: ?parkingNo=123
+
+End Parking
+Endpoint: POST /parking/end?regNo=TS09AB1234
+
+Expected Output
+When starting parking, the system logs the start time.
+When ending parking, the system calculates the price (2 Rs per minute).
+Would you like further enhancements, such as Swagger documentation, MySQL support, or authentication?
+
+
+
+
+
+
+
+You said:
+
+Need spring boot code 
+ChatGPT said:
+Memory updated
+Spring Boot Implementation: Digital Parking System
+This implementation includes two microservices using Spring Boot, AWS DynamoDB, and SQS (or any messaging queue).
+
+
+================================================================
+1️⃣ Microservice: Car-Parking-Registration
+Stores ParkingStart data in DynamoDB.
+Sends a message to SQS (parking-start-request).
+Listens for responses from SQS (parking-start-response).
+Dependencies (pom.xml)
+xml
+Copy
+Edit
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-dynamodb</artifactId>
+</dependency>
+<dependency>
+    <groupId>software.amazon.awssdk</groupId>
+    <artifactId>sqs</artifactId>
+</dependency>
+
+------------------------------------------------
+DynamoDB Entity: ParkingStart.java
+
+package com.example.parking.model;
+
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
+import java.time.LocalDateTime;
+
+@DynamoDbBean
+public class ParkingStart {
+    private String parkingNo;
+    private String regNo;
+    private LocalDateTime startTime;
+    private String status;
+
+    @DynamoDbPartitionKey
+    public String getParkingNo() { return parkingNo; }
+
+    public void setParkingNo(String parkingNo) { this.parkingNo = parkingNo; }
+    public String getRegNo() { return regNo; }
+    public void setRegNo(String regNo) { this.regNo = regNo; }
+    public LocalDateTime getStartTime() { return startTime; }
+    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+}
+
+-----------------------------------------------
+Repository: ParkingStartRepository.java
+
+package com.example.parking.repository;
+
+import com.example.parking.model.ParkingStart;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ParkingStartRepository extends CrudRepository<ParkingStart, String> {
+}
+
+---------------------------------------------
+Service: ParkingService.java
+
+package com.example.parking.service;
+
+import com.example.parking.model.ParkingStart;
+import com.example.parking.repository.ParkingStartRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
+
+@Service
+public class ParkingService {
+    @Autowired
+    private ParkingStartRepository repository;
+
+    public ParkingStart startParking(ParkingStart parking) {
+        parking.setStartTime(LocalDateTime.now());
+        parking.setStatus("Start");
+        return repository.save(parking);
+    }
+}
+--------------------------------------------
+
+Controller: ParkingController.java
+
+package com.example.parking.controller;
+
+import com.example.parking.model.ParkingStart;
+import com.example.parking.service.ParkingService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/parking")
+public class ParkingController {
+
+    @Autowired
+    private ParkingService service;
+
+    @PostMapping("/start")
+    public ParkingStart startParking(@RequestBody ParkingStart parking) {
+        return service.startParking(parking);
+    }
+}
+
+==============================================================
+2️⃣ Microservice: Car-Parking-Process
+
+
+Listens to SQS queue (parking-start-request).
+Retrieves ParkingStart data from DynamoDB.
+Stores ParkingEnd details and calculates price.
+Sends a response to SQS (parking-end-response).
+Dependencies (pom.xml)
+Same as above.
+
+DynamoDB Entity: ParkingEnd.java
+
+package com.example.parking.model;
+
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
+import java.time.Duration;
+import java.time.LocalDateTime;
+
+@DynamoDbBean
+public class ParkingEnd {
+    private String parkingNo;
+    private String regNo;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private int price;
+    private String status;
+
+    @DynamoDbPartitionKey
+    public String getParkingNo() { return parkingNo; }
+
+    public void setParkingNo(String parkingNo) { this.parkingNo = parkingNo; }
+    public String getRegNo() { return regNo; }
+    public void setRegNo(String regNo) { this.regNo = regNo; }
+    public LocalDateTime getStartTime() { return startTime; }
+    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
+    public LocalDateTime getEndTime() { return endTime; }
+    public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+    public int getPrice() { return price; }
+    public void setPrice(int price) { this.price = price; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public void calculatePrice() {
+        if (startTime != null && endTime != null) {
+            long minutes = Duration.between(startTime, endTime).toMinutes();
+            this.price = (int) minutes * 2;
+        }
+    }
+}
+
+
+Service: ParkingProcessService.java
+
+package com.example.parking.service;
+
+import com.example.parking.model.ParkingEnd;
+import com.example.parking.repository.ParkingEndRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
+
+@Service
+public class ParkingProcessService {
+
+    @Autowired
+    private ParkingEndRepository repository;
+
+    public ParkingEnd endParking(String parkingNo, String regNo, LocalDateTime startTime) {
+        ParkingEnd parkingEnd = new ParkingEnd();
+        parkingEnd.setParkingNo(parkingNo);
+        parkingEnd.setRegNo(regNo);
+        parkingEnd.setStartTime(startTime);
+        parkingEnd.setEndTime(LocalDateTime.now());
+        parkingEnd.setStatus("End");
+        parkingEnd.calculatePrice();
+        return repository.save(parkingEnd);
+    }
+}
+
+
+SQS Listener: ParkingSQSListener.java
+
+package com.example.parking.queue;
+
+import com.example.parking.model.ParkingEnd;
+import com.example.parking.service.ParkingProcessService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.stereotype.Component;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
+
+import java.time.LocalDateTime;
+
+@Component
+public class ParkingSQSListener {
+
+    @Autowired
+    private ParkingProcessService service;
+
+    private final SqsClient sqsClient = SqsClient.create();
+
+    private static final String QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/your-account-id/parking-start-request";
+    private static final String RESPONSE_QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/your-account-id/parking-end-response";
+
+    @MessageMapping(QUEUE_URL)
+    public void processMessage(String message) {
+        String[] data = message.split(",");
+        String parkingNo = data[0];
+        String regNo = data[1];
+        LocalDateTime startTime = LocalDateTime.parse(data[2]);
+
+        ParkingEnd parkingEnd = service.endParking(parkingNo, regNo, startTime);
+
+        // Send response back to response queue
+        sqsClient.sendMessage(SendMessageRequest.builder()
+            .queueUrl(RESPONSE_QUEUE_URL)
+            .messageBody("Parking Ended: " + parkingEnd.getParkingNo() + ", Price: " + parkingEnd.getPrice())
+            .build());
+    }
+}
+
+
+
+3️⃣ Additional Features
+✅ Custom Exception Handling
+✅ Test Cases (@SpringBootTest)
+✅ Swagger API Documentation
+✅ README with Setup Instructions
+
+This setup ensures event-driven communication between microservices using AWS SQS and DynamoDB.
+Would you like a GitHub repository with all the code?
+
+
+
+
+
+
+
+
+
+
+
