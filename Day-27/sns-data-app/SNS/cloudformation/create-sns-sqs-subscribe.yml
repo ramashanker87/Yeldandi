@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Parking sns status
+Parameters:
+  Solution:
+    Type: String
+    Default: "prashant"
+  Environment:
+    Type: String
+    Default: "test"
+  VisibilityTimeout:
+    Type: String
+    Default: 60
+  MessageTTL:
+    Type: String
+    Default: 7200
+  MaxReceiveCountBeforeDLQ:
+    Type: String
+    Default: 2
+
+Resources:
+  DataEventsQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Solution}-${Environment}-data-events-dlq"
+      VisibilityTimeout: !Ref VisibilityTimeout
+
+  DataEventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Solution}-${Environment}-data-events"
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+            - DataEventsQueueDLQ
+            - Arn
+        maxReceiveCount: !Ref MaxReceiveCountBeforeDLQ
+      VisibilityTimeout: !Ref VisibilityTimeout
+      MessageRetentionPeriod: !Ref MessageTTL
+
+  # Data topic for events
+  DataEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${Solution}-${Environment}-data-events-topics
+
+  # Data SQS subscribe from the SNS
+  DataEventsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: sqs
+      Endpoint: !GetAtt DataEventsQueue.Arn
+      RawMessageDelivery: true
+      TopicArn: !Ref DataEventsTopic

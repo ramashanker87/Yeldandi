@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploy Hello Spring Boot App on ECS Fargate with API Gateway"
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+  ShortSolution:
+    Type: String
+    Default: rama
+Resources:
+  # ECR Repository to store the Docker image
+  SpringBootECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: springboot-hello-world
+  # Log Group for cluster service log
+  TheLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/ecs/fargate/hello"
+  # Task Execution Cluster
+  SpringBootECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      CapacityProviders:
+        - 'FARGATE'
+      ClusterName:  !Sub '${ShortSolution}-${Environment}-hello-cluster'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+  # Task Execution Role
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # ECS Task Definition
+  SpringBootTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family:  !Sub '${ShortSolution}-${Environment}-hello-task'
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name:  !Sub '${ShortSolution}-${Environment}-hello-app'
+          Image: !Sub "${SpringBootECRRepository.RepositoryUri}:latest"
+          HealthCheck:
+            Command: [ "CMD-SHELL","curl -f http://localhost:8080/actuator/health/ || exit 1" ]
+            Interval: 30
+            Timeout: 60
+            Retries: 3
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TheLogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: "ecs"
+
+  # ECS Service
+  SpringBootECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName:  !Sub '${ShortSolution}-${Environment}-hello-service'
+      Cluster: !Ref SpringBootECSCluster
+      DesiredCount: 2
+      LaunchType: FARGATE
+      TaskDefinition: !Ref SpringBootTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !ImportValue PublicSubnet1Id
+            - !ImportValue PublicSubnet2Id
+          SecurityGroups:
+            - !Ref ServiceSecurityGroup
+      LoadBalancers:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          ContainerName:  !Sub '${ShortSolution}-${Environment}-hello-app'
+          ContainerPort: 8080
+
+  ###################################################################################################
+  #  Application Load Balancer (ALB)
+  # ALB: An internet-facing Application Load Balancer is created, distributing traffic across services.
+  # Subnets: The ALB spans across both PublicSubnet1 and PublicSubnet2 for high availability.
+  # Security Groups: The ALB is associated with a security group to control access.
+  ##################################################################################################
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ShortSolution}-${Environment}-hello-alb'
+      Scheme: internet-facing
+      Subnets:
+        - !ImportValue PublicSubnet1Id
+        - !ImportValue PublicSubnet2Id
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+  #####################################################################################################
+  # Security Group: Allows incoming HTTP traffic (port 80) from any IP (0.0.0.0/0) to the ALB.
+  ####################################################################################################
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow traffic to ALB"
+      VpcId: !ImportValue VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+  #######################################################################################################
+  # Target Group: The ALB forwards traffic to the ECS service through this target group.
+  # Health Check: The target group performs health checks on the /actuator/health/ endpoint to monitor
+  #  the status of targets.
+  #######################################################################################################
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn:
+      - ALB
+    Properties:
+      Name:  !Sub '${ShortSolution}-${Environment}-hello-target'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !ImportValue VPCId
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/actuator/health/"
+      HealthCheckIntervalSeconds: 30
+
+
+  #########################################################################################################
+  #  ALB Listener
+  # Listener: The ALB listens on port 80 and forwards incoming HTTP traffic to the ALB target group.
+  ###################################################################################################
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+  #########################################################################################################
+  #Service Security Group: Allows traffic from the ALB to the ECS tasks running in the cluster on port 8080
+  #########################################################################################################
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow ALB traffic to ECS tasks"
+      VpcId: !ImportValue VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+Outputs:
+  ECRRepositoryURI:
+    Value: !Ref SpringBootECRRepository
+    Description: "ECR repository URI for the Spring Boot Docker image"
+  ALBDnsName:
+    Description: "DNS name of the ALB"
+    Value: !GetAtt ALB.DNSName

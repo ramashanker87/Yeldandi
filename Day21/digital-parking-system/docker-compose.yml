@@ -1,0 +1,89 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb
+      - AWS_DEFAULT_REGION=us-east-1
+      - DEBUG=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4566" ]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+    networks:
+      - parking-network
+
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status" ]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+    networks:
+      - parking-network
+  mysql:
+    image: mysql:8
+    restart: always
+    container_name: mysql
+    environment:
+      MYSQL_DATABASE: 'parking'
+      MYSQL_USER: 'user'
+      MYSQL_PASSWORD: 'password'
+      MYSQL_ROOT_PASSWORD: 'password'
+    ports:
+      - '3306:3306'
+    networks:
+      - parking-network
+
+#  car-registration:
+#    image: digital-parking-system-registration:latest
+#    container_name: car-registration
+#    ports:
+#      - "8081:8081"
+#    environment:
+#      - SPRING_RABBITMQ_HOST=rabbitmq
+#      - SPRING_RABBITMQ_PORT=5672
+#    depends_on:
+#      rabbitmq:
+#        condition: service_healthy
+#      localstack:
+#        condition: service_healthy
+#    restart: always
+#    networks:
+#      - parking-network
+#
+#  car-process:
+#    image: digital-parking-system-process:latest
+#    container_name: car-process
+#    ports:
+#      - "8082:8082"
+#    environment:
+#      - SPRING_RABBITMQ_HOST=rabbitmq
+#      - SPRING_RABBITMQ_PORT=5672
+#    depends_on:
+#      car-registration:
+#        condition: service_started
+#      rabbitmq:
+#        condition: service_healthy
+#      localstack:
+#        condition: service_healthy
+#    restart: always
+#    networks:
+#      - parking-network
+
+networks:
+  parking-network:
+    driver: bridge  # Ensure this network exists before starting services

@@ -1,0 +1,28 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      # Log in to Amazon ECR
+      - echo Logging in to Amazon ECR...
+      - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+
+  build:
+    commands:
+      # Build the Docker image
+      - echo Building the Docker image...
+      - docker build -t springboot-hello-world .
+      # Tag the Docker image
+      - docker tag springboot-hello-world:latest $REPOSITORY_URI:latest
+
+  post_build:
+    commands:
+      # Push the Docker image to Amazon ECR
+      - echo Pushing the Docker image to ECR...
+      - docker push $REPOSITORY_URI:latest
+      # Generate the imagedefinitions.json file
+      - echo "[{\"name\":\"springboot-container\",\"imageUri\":\"$REPOSITORY_URI:latest\"}] > imagedefinitions.json"
+
+artifacts:
+  files:
+    - imagedefinitions.json  # This is the file CodePipeline will use for deployment

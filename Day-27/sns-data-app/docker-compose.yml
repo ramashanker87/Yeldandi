@@ -1,0 +1,46 @@
+version: "3.8"
+services:
+  parking:
+    image: parking-app:latest
+    container_name: parking
+    ports:
+      - "8081:8081"
+    depends_on:
+      localstack:
+        condition: service_healthy
+    links:
+      - localstack
+    environment:
+      - SPRING_PROFILES_ACTIVE=local
+      - aws_endpoint=http://localstack:4566
+    networks:
+      - base-cluster_parking
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb,cloudwatch
+      - AWS_DEFAULT_REGION=eu-west-1
+      - LS_LOG=info
+      # Set DEBUG to 1 when fault tracing
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - EDGE_PORT=4566
+    healthcheck:
+      test: "curl --silent --fail localhost:4566/_localstack/health > health.out && curl --silent --fail localhost:4566/_localstack/init >> health.out && cat health.out | grep '\"dynamodb\": \"running\"' |grep -v '\"ERROR\"'"
+      interval: 2s
+      retries: 10
+      start_period: 10s
+      timeout: 5s
+    volumes:
+      - ./localstack-ready:/etc/localstack/init/ready.d/
+      - /var/lib/localstack:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - base-cluster_parking
+networks:
+  base-cluster_parking:
+    driver: bridge

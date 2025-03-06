@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ALB and related resources'
+
+Resources:
+###################################################################################################
+#  Application Load Balancer (ALB)
+# ALB: An internet-facing Application Load Balancer is created, distributing traffic across services.
+# Subnets: The ALB spans across both PublicSubnet1 and PublicSubnet2 for high availability.
+# Security Groups: The ALB is associated with a security group to control access.
+##################################################################################################
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "MicroserviceALB"
+      Scheme: internet-facing
+      Subnets:
+        - !ImportValue PublicSubnet1Id
+        - !ImportValue PublicSubnet2Id
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+#####################################################################################################
+# Security Group: Allows incoming HTTP traffic (port 80) from any IP (0.0.0.0/0) to the ALB.
+####################################################################################################
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow traffic to ALB"
+      VpcId: !ImportValue VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+#######################################################################################################
+# Target Group: The ALB forwards traffic to the ECS service through this target group.
+# Health Check: The target group performs health checks on the /actuator/health/ endpoint to monitor
+#  the status of targets.
+#######################################################################################################
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "MicroserviceTargetGroup"
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !ImportValue VPCId
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/actuator/health/"
+      HealthCheckIntervalSeconds: 30
+
+#########################################################################################################
+#  ALB Listener
+# Listener: The ALB listens on port 80 and forwards incoming HTTP traffic to the ALB target group.
+###################################################################################################
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+Outputs:
+  ALBArn:
+    Description: 'ALB ARN'
+    Value: !Ref ALB
+    Export:
+      Name: 'ALBArn'
+  ALBTargetGroupId:
+    Description: 'ALB Target Group ID'
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: 'ALBTargetGroupId'
+
+  ALBSecurityGroupId:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: 'ALBSecurityGroupId'
+
+  ALBDnsName:
+    Description: "DNS name of the ALB"
+    Value: !GetAtt ALB.DNSName

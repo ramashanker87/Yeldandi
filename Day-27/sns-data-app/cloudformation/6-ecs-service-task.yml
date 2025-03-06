@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploy Calculator Spring Boot App on ECS Fargate with API Gateway"
+
+Resources:
+  TheLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/ecs/fargate/rama/parking"
+
+  # Task Execution Role
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # IAM Role for ECS Task to Access DynamoDB
+  ParkingECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ParkingECSTaskRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDBAccessPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: "*"
+  # ECS Task Definition
+  FargateTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: "ParkingTask"
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ParkingECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: "parking-app"
+          Image: 975050323630.dkr.ecr.us-east-1.amazonaws.com/rama-parking-app
+          HealthCheck:
+            Command: [ "CMD-SHELL","curl -f http://localhost:8080/actuator/health/ || exit 1" ]
+            Interval: 30
+            Timeout: 60
+            Retries: 3
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TheLogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: "ecs"
+
+  # ECS Service
+  FargateService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: 'parking-service'
+      Cluster: !ImportValue RamaEcsParkingCluster
+      DesiredCount: 2
+      LaunchType: FARGATE
+      TaskDefinition: !Ref FargateTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !ImportValue PublicSubnet1Id
+            - !ImportValue PublicSubnet2Id
+          SecurityGroups:
+            - !ImportValue ServiceSecurityGroupId
+      LoadBalancers:
+        - TargetGroupArn: !ImportValue ALBTargetGroupId
+          ContainerName: "parking-app"
+          ContainerPort: 8080
+

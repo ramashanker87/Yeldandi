@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Service Security Group'
+
+Resources:
+
+#########################################################################################################
+#Service Security Group: Allows traffic from the ALB to the ECS tasks running in the cluster on port 8080
+#########################################################################################################
+  PrashantServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow ALB traffic to ECS tasks"
+      VpcId: !ImportValue VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !ImportValue PrashantALBSecurityGroupId
+
+Outputs:
+  PrashantServiceSecurityGroupId:
+    Description: 'ECS Service Security Group ID'
+    Value: !Ref PrashantServiceSecurityGroup
+    Export:
+      Name: 'PrashantServiceSecurityGroupId'

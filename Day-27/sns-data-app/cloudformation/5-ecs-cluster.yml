@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation Create ECS Cluster
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+  ShortSolution:
+    Type: String
+    Default: rama
+
+Resources:
+  EcsCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      CapacityProviders:
+        - 'FARGATE'
+      ClusterName: !Sub '${ShortSolution}-${Environment}-parking-cluster'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+Outputs:
+  EcsClusterTraining:
+    Value: !Ref EcsCluster
+    Export:
+      Name: 'RamaEcsParkingCluster'
+

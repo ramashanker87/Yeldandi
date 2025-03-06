@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation Create ECS Cluster
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+  ShortSolution:
+    Type: String
+    Default: rama
+
+Resources:
+  EcsCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      CapacityProviders:
+        - 'FARGATE'
+      ClusterName: !Sub '${ShortSolution}-${Environment}-calculator-cluster'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+Outputs:
+  EcsClusterArn:
+    Export:
+      Name: !Sub '${AWS::StackName}:EcsCluster:arn'
+    Value: !GetAtt EcsCluster.Arn

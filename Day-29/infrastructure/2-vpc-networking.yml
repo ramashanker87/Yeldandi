@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC and Networking resources'
+
+Resources:
+  #####################################################################################################
+  #VPC: Creates a Virtual Private Cloud with a CIDR block of 10.0.0.0/16.
+  #DNS support: Enabling EnableDnsSupport and EnableDnsHostnames ensures that the VPC can resolve
+  #DNS hostnames and work with services like ECS or RDS.
+  #Tag: A tag with the name VPC is added to help identify this VPC.
+  #####################################################################################################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "MicroserviceVPC"
+
+  ##########################################################################################################
+  # Subnets: Two public subnets (PublicSubnet1 and PublicSubnet2) are created with CIDR blocks 10.0.1.0/24
+  #  and 10.0.2.0/24, respectively.
+  # Map Public IP: MapPublicIpOnLaunch ensures that instances launched in these subnets automatically
+  #  receive public IPs.
+  # Availability Zones: Subnet 1 is in the first AZ, and Subnet 2 is in the second AZ in the region.
+  ##########################################################################################################
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+
+  # Internet Gateway: This resource enables communication between the VPC and the Internet.
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  # VPCGatewayAttachment: Attaches the Internet Gateway to the VPC,
+  # allowing instances in the VPC to access the internet.
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  #################################################################################################
+  #  Route Table: A public route table is created for the VPC.
+  #  Route: A default route (0.0.0.0/0) is added to the public route table, directing traffic to the
+  #  Internet Gateway for internet access.
+  #################################################################################################
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  ###################################################################################################
+  #  Subnet Association: Associates the public subnets with the public route table, ensuring they can
+  #  route traffic to the Internet Gateway.
+  ####################################################################################################
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: 'VPCId'
+  PublicSubnet1Id:
+    Description: 'Subnet ID of PublicSubnet1'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: 'PublicSubnet1Id'
+  PublicSubnet2Id:
+    Description: 'Subnet ID of PublicSubnet2'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: 'PublicSubnet2Id'
+
+#  Network and Host Breakdown:
+#   Network Address: The starting address of the network (10.0.0.0).
+#  Broadcast Address: The last address in the range, used for broadcasting to all devices in the network (10.0.255.255).
+#  IP Address Range: The available IP addresses for devices (hosts) range from 10.0.0.1 to 10.0.255.254.
+#  Total Addresses: With 16 bits for the host portion, the network can have 2^16 = 65,536 total addresses,
+#  but 2 addresses are reserved: one for the network address (10.0.0.0) and one for the broadcast
+#  address (10.0.255.255). Therefore, 65,534 IP addresses can be assigned to hosts.
+
+

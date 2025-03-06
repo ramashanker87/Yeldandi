@@ -1,9 +1,11 @@
 package com.raghu.app.repository;
 
-import com.example.parking.model.ParkingStart;
-import org.springframework.data.repository.CrudRepository;
-import org.springframework.stereotype.Repository;
+import com.raghu.app.module.ParkingStart;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-@Repository
-public interface ParkingStartRepository extends CrudRepository<ParkingStart, String> {
+public interface ParkingStartRepository extends JpaRepository<ParkingStart, Integer> {
+
+
+
+    ParkingStart findByParkingNo(String parkingNumber);
 }

@@ -1,0 +1,20 @@
+version: '3.2'
+services:
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+
+  mysql:
+    image: mysql:8
+    restart: always
+    container_name: mysql
+    environment:
+      MYSQL_DATABASE: 'student'
+      MYSQL_USER: 'user'
+      MYSQL_PASSWORD: 'password'
+      MYSQL_ROOT_PASSWORD: 'password'
+    ports:
+      - '3306:3306'

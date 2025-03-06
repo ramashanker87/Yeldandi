@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  MyDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: 'rama-parking-status'
+      AttributeDefinitions:
+        - AttributeName: carRegNo
+          AttributeType: S
+        - AttributeName: parkingNo
+          AttributeType: S
+      KeySchema:
+        - AttributeName: carRegNo
+          KeyType: HASH
+        - AttributeName: parkingNo
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: false
+
+Parameters:
+  TableName:
+    Type: String
+    Default: MyDynamoDBTable

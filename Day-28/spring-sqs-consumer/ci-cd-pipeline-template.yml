@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+  Solution:
+    Type: String
+    Default: syed
+  Apllication:
+    Type: String
+    Default: sqs
+  # ECR repository for storing Docker images
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${Solution}-${Environment}-${Apllication}-app-repo'
+
+  # ECS Cluster for Fargate
+  ECSCluster:
+    EcsCluster:
+      Type: 'AWS::ECS::Cluster'
+      Properties:
+        CapacityProviders:
+          - 'FARGATE'
+        ClusterName: !Sub '${Solution}-${Environment}-${Apllication}-cluster'
+        ClusterSettings:
+          - Name: containerInsights
+            Value: enabled
+
+  # ECS Task Definition for Fargate
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: SyedECSAppTask
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Name: !Sub "${Solution}-${Environment}-${Apllication}-app-container"
+          Image: !Sub "123456789012.dkr.ecr.${AWS::Region}.amazonaws.com/${Solution}-${Environment}-${Apllication}-app-repo:latest"
+          HealthCheck:
+            Command: [ "CMD-SHELL","curl -f http://localhost:8080/actuator/health/ || exit 1" ]
+            Interval: 30
+            Timeout: 60
+            Retries: 3
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TheLogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: "ecs"
+
+  # ECS Service for Fargate deployment
+  FargateService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ECSCluster
+      ServiceName: !Sub "${Solution}-${Environment}-${Apllication}-service"
+      TaskDefinition: !Ref ECSTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+
+  # CodeBuild project for building Docker image
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${Solution}-${Environment}-${Apllication}-SpringBootBuildProject"
+      Source:
+        Type: CODECOMMIT
+        Location: !Sub "https://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/SyedSpringBootAppRepo"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true  # Required for Docker builds
+      ServiceRole: !GetAtt CodePipelineRole.Arn
+
+  # CodePipeline role
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Solution}-${Environment}-${Apllication}-CodePipelineRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${Solution}-${Environment}-${Apllication}-CodePipelinePolicy"
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                  - codecommit:*
+                  - codebuild:*
+                  - ecs:*
+                  - codedeploy:*
+                Resource: "*"
+
+  # CodePipeline
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub "${Solution}-${Environment}-${Apllication}-SpringBootPipeline"
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Sub "${Solution}-${Environment}-${Apllication}-artifact-bucket"
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: "1"
+              Configuration:
+                RepositoryName: SyedSpringBootAppRepo
+                BranchName: main
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Sub "${Solution}-${Environment}-${Apllication}-SpringBootBuildProject"
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        - Name: Deploy
+          Actions:
+            - Name: DeployAction
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: "1"
+              Configuration:
+                ClusterName: !Ref ECSCluster
+                ServiceName: !Ref ECSService
+                ImageDefinitions: !Sub '[{"name":"my-container","imageUri":"${ECRRepositoryUri}:latest"}]'
+              InputArtifacts:
+                - Name: BuildOutput
